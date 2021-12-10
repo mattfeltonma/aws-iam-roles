@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create IAM Group and Managed Policy for Security Admin"
+
+Resources:
+
+  ## Create IAM Group
+
+  SecurityAdminsIAMGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: "SecurityAdmins"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+
+  ## Create IAM Policy
+
+  SecurityAdminsIAMPolicy:  
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Groups: 
+        - !Ref SecurityAdminsIAMGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            
+            ## Allow access to CloudWatch Logs, GuardDuty, Trusted Advisor, Config, SSM, SNS
+          -
+            Sid: "AllowAccessSecServices"
+            Effect: "Allow"
+            Action:
+              - "logs:*"
+              - "guardduty:*"
+              - "trustedadvisor:*"
+              - "config:*"
+              - "ssm:*"
+              - "sns:*"
+            Resource: "*"
+          
+            ## Deny destructive calls to CloudWatch Logs, GuardDuty, AWS Config, and Systems Manager
+            ## Sessions Manager
+
+          -
+            Sid: "DenyDestructiveCallsToSecServices"
+            Effect: "Deny"
+            Action:
+
+              ## Deny access to delete calls to CloudWatch Logs
+
+              - "Logs:Delete*"
+
+              ## Deny access to disable or suspend GuardDuty
+
+              - "GuardDuty:DeleteDetector"
+              - "GuardDuty:UpdateDetector"
+
+              ## Deny access to remove accounts that have been configured to report to this master GuardDuty account
+
+              - "GuardDuty:DeleteMembers"
+              - "GuardDuty:DisassociateFromMasterAccount"
+              - "GuardDuty:DisassociateMembers"
+              - "GuardDuty:StopMonitoringMembers"
+
+              ## Deny access to modify core AWS Config settings
+
+              - "Config:PutConfigurationRecorder"
+              - "Config:DeleteConfigurationRecorder"
+              - "Config:StopConfigurationRecorder"
+              - "Config:StartConfigurationRecorder"
+              - "Config:PutRetentionConfiguration"
+              - "Config:DeleteRetentionConfiguation"
+              - "Config:PutDeliveryChannel"
+              - "Config:DeleteDeliveryChannel"
+
+            Resource: "*"
+
+            ## Deny access to change Systems Manager Session Manager preferences
+          -
+            Sid: "DenySMPreferenceChanges"
+            Effect: "Deny"
+            Action:
+              - "ssm:CreateDocument"
+              - "ssm:DeleteDocument"
+              - "ssm:ModifyDocumentPermission"
+              - "ssm:UpdateDocument*"
+            Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:document/SSM-SessionManagerRunShell"
+
+      ManagedPolicyName: Custom-SecurityAdmins-Managed-Policy

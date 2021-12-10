@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create IAM Group and Managed Policy for Network Admin"
+
+Resources:
+
+  ## Create IAM Group
+
+  NetworkAdminsIAMGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: "NetworkAdmins"
+
+  ## Create IAM Policy
+
+  NetworkAdminsIAMPolicy:  
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Groups: 
+        - !Ref NetworkAdminsIAMGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+
+            ## Allow access to CloudWatch Metrics and Alarms
+          -
+            Sid: "AllowCloudWatchMetricsAlarms"
+            Effect: "Allow"
+            Action:
+              - "cloudwatch:DeleteAlarms"
+              - "cloudwatch:DescribeAlarmHistory"
+              - "cloudwatch:DescribeAlarms"
+              - "cloudwatch:DescribeAlarmsForMetric"
+              - "cloudwatch:DisableAlarmActions"
+              - "cloudwatch:EnableAlarmActions"
+              - "cloudwatch:PutMetricAlarm"
+              - "cloudwatch:SetAlarmState"
+              - "cloudwatch:deletedashboards"
+              - "cloudwatch:getdashboard"
+              - "cloudwatch:GetMetricData"
+              - "cloudwatch:GetMetricStatistics"
+              - "cloudwatch:GetMetricWidgetImage"
+              - "cloudwatch:ListDashboards"
+              - "cloudwatch:ListMetrics"
+              - "cloudwatch:PutDashboard"
+              - "cloudwatch:PutMetricData"
+            Resource: "*"
+            
+            ## Allow all actions for ELB
+            ## Note that ELB requires a service-linked role
+          -
+            Sid: "AllowElbManagement"
+            Effect: "Allow"
+            Action:
+              - "elasticloadbalancing:*"
+              - "iam:CreateServiceLinkedRole"
+            Resource: "*"
+
+            ## Allow all Get and Describe actions for EC2
+          -
+            Sid: "AllowAllEC2"
+            Effect: "Allow"
+            Action:
+              - "ec2:Describe*" 
+              - "ec2:Get*"
+            Resource: "*"
+
+            ## Blacklist - Deny sensitive Get/Describe Compute actions
+          -
+            Sid: "DenySensitiveEC2"
+            Effect: "Deny"
+            Action:
+              - "ec2:GetConsoleOutput" 
+              - "ec2:GetPasswordData"
+              - "ec2:DescribeIamInstanceProfileAssociations"
+              - "ec2:DescribeKeyPairs"
+              - "ec2:GetConsoleScreenshot"
+            Resource: "*"
+
+            ## Allow tag management
+          -
+            Sid: "AllowTagManagement"
+            Effect: "Allow"
+            Action:
+              - "ec2:CreateTags"
+              - "ec2:DeleteTags"
+            Resource: "*"
+
+            ## Whitelist of modifying EC2 networking actions
+          -
+            Sid: "AllowEC2Networking"
+            Effect: "Allow"
+            Action:
+              - "ec2:AcceptTransitGatewayVpcAttachment"
+              - "ec2:AcceptVpcEndpointConnections"
+              - "ec2:AcceptVpcPeeringConnection"
+              - "ec2:AdvertiseByoipCidr"
+              - "ec2:AssociateDhcpOptions"
+              - "ec2:AssociateRouteTable"
+              - "ec2:AssociateSubnetCidrBlock"
+              - "ec2:AssociateTransitGatewayRouteTable"
+              - "ec2:AssociateVpcCidrBlock"
+              - "ec2:AttachClassicLinkVpc"
+              - "ec2:AttachInternetGateway"
+              - "ec2:AttachVpnGateway"
+              - "ec2:AuthorizeSecurityGroupEgress"
+              - "ec2:AuthorizeSecurityGroupIngress"
+              - "ec2:CreateDefaultVpc"
+              - "ec2:CreateDefaultSubnet"
+              - "ec2:CreateDhcpOptions"
+              - "ec2:CreateEgressOnlyInternetGateway"
+              - "ec2:CreateInternetGateway"
+              - "ec2:CreateNatGateway"
+              - "ec2:CreateNetworkAcl*"
+              - "ec2:CreateRoute*"
+              - "ec2:CreateSecurityGroup"
+              - "ec2:CreateSubnet"
+              - "ec2:CreateDefaultSubnet"
+              - "ec2:CreateTransitGateway*"
+              - "ec2:CreateVpc*"
+              - "ec2:CreateVpn*"
+              - "ec2:DeleteCustomerGateway"
+              - "ec2:DeleteDhcpOptions"
+              - "ec2:DeleteEgressOnlyInternetGateway"
+              - "ec2:DeleteFlowLogs"
+              - "ec2:DeleteInternetGateway"
+              - "ec2:DeleteNatGateway"
+              - "ec2:DeleteNetworkAcl*"
+              - "ec2:DeleteRoute*"
+              - "ec2:DeleteSecurityGroup"
+              - "ec2:DeleteSubnet"
+              - "ec2:DeleteTransitGateway*"
+              - "ec2:DeleteVpc*"
+              - "ec2:DeprovisionByoipCidr"
+              - "ec2:DetachInternetGateway"
+              - "ec2:DetachNetworkInterface"
+              - "ec2:DetachVpnGateway"
+              - "ec2:DisableTransitGatewayRouteTablePropagation"
+              - "ec2:DisableVgwRoutePropagation"
+              - "ec2:DisableVpcClassicLink"
+              - "ec2:DisableVpcClassicLinkDnsSupport"
+              - "ec2:DisassociateRouteTable"
+              - "ec2:DisassociateSubnetCidrBlock"
+              - "ec2:DisassociateTransitGatewayRouteTable"
+              - "ec2:DisassociateVpcCidrBlock"
+              - "ec2:EnableTransitGatewayRouteTablePropagation"
+              - "ec2:EnableVgwRoutePropagation"
+              - "ec2:EnableVpcClassicLink"
+              - "ec2:EnableVpcClassicLinkDnsSupport"
+              - "ec2:ModifySubnetAttribute"
+              - "ec2:ModifyTransitGatewayVpcAttachment"
+              - "ec2:ModifyVpc*"
+              - "ec2:ProvisionByoipCidr"
+              - "ec2:RejectTransitGatewayVpcAttachment"
+              - "ec2:RejectVpc*"
+              - "ec2:ReplaceNetworkAcl*"
+              - "ec2:ReplaceRoute*"
+              - "ec2:ReplaceTransitGatewayRoute"
+              - "ec2:RevokeSecurityGroupIngress"
+              - "ec2:RevokeSecurityGroupEgress"
+              - "ec2:UpdateSecurityGroupRuleDescriptionsIngress"
+              - "ec2:UpdateSecurityGroupRuleDescriptionsEgress"
+              - "ec2:WithdrawByoipCidr"
+            Resource: "*"
+      ManagedPolicyName: Custom-Networking-Admins-Managed-Policy

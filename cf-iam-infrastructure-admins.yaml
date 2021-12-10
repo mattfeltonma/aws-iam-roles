@@ -1,0 +1,280 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create IAM Group and Managed Policy for Infrastructure Admin"
+Parameters:
+
+  RDSKMSArn:
+    Type: String
+    Description: 'This is the Arn of the KMS CMK used to parameters for RDS'
+  EC2KMSArn:
+    Type: String
+    Description: 'This is the Arn of the KMS CMK used to parameters for EC2'   
+  EFSKMSArn:
+    Type: String
+    Description: 'This is the Arn of the KMS CMK used to parameters for EFS'
+  CloudFormationBucketArn:
+    Type: String
+    Description: 'This is the Arns of the CloudFormation S3 bucket'
+  CloudFormationExecuteIAMRoleArn:
+    Type: String
+    Description: 'This is the Arn of the CloudFormation Execute IAM Role'
+    
+Resources:
+
+  ## Create IAM Group
+
+  InfrastructureAdminsIAMGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: "InfastructureAdmins"
+
+  ## Create IAM Policy
+
+  InfrastructureAdminsIAMPolicy:  
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Groups: 
+        - !Ref InfrastructureAdminsIAMGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+
+            ## Allow access to CloudWatch Metrics and Alarms
+          -
+            Sid: "AllowCloudWatchMetricsAlarms"
+            Effect: "Allow"
+            Action:
+              - "cloudwatch:DeleteAlarms"
+              - "cloudwatch:DescribeAlarmHistory"
+              - "cloudwatch:DescribeAlarms"
+              - "cloudwatch:DescribeAlarmsForMetric"
+              - "cloudwatch:DisableAlarmActions"
+              - "cloudwatch:EnableAlarmActions"
+              - "cloudwatch:PutMetricAlarm"
+              - "cloudwatch:SetAlarmState"
+              - "cloudwatch:deletedashboards"
+              - "cloudwatch:getdashboard"
+              - "cloudwatch:GetMetricData"
+              - "cloudwatch:GetMetricStatistics"
+              - "cloudwatch:GetMetricWidgetImage"
+              - "cloudwatch:ListDashboards"
+              - "cloudwatch:ListMetrics"
+              - "cloudwatch:PutDashboard"
+              - "cloudwatch:PutMetricData"
+            Resource: "*"
+            
+            ## Allow all actions for EFS, ELB, and RDS
+            ## Note that ELB requires a service-linked role
+            ## Allow user to list IAM roles to choose from one when creating an instance through Management Console
+          -
+            Sid: "AllowEfsElbRds"
+            Effect: "Allow"
+            Action:
+              - "elasticfilesystem:*"
+              - "elasticloadbalancing:*"
+              - "rds:*"
+              - "iam:CreateServiceLinkedRole"
+              - "iam:ListRoles"
+            Resource: "*"
+
+            ## Allow listing of CMKs
+          -
+            Sid: "AllowListCMK"
+            Effect: "Allow"
+            Action:
+              - "kms:ListAliases"
+              - "kms:ListKeys"
+            Resource: "*"
+
+            ## Allow use of KMS CMK to encrypt EC2 EBS Volumes
+          -
+            Sid: "AllowUseCMKEBS"
+            Effect: "Allow"
+            Action:
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:DescribeKey"
+              - "kms:GenerateDataKey*"
+              - "kms:CreateGrant"
+            Resource:
+              - !Ref EC2KMSArn
+
+            ## Allow use of KMS CMK to encrypt EFS filesystem and RDS instances and snapshots
+          -
+            Sid: "AllowUseCMKEfsRds"
+            Effect: "Allow"
+            Action:
+              - "kms:Decrypt"
+              - "kms:DescribeKey"
+              - "kms:GenerateDataKey*"
+              - "kms:CreateGrant"
+            Resource:
+              - !Ref EFSKMSArn
+              - !Ref RDSKMSArn
+
+            ## Allow read all parameters except encrypted (no access to CMKs)
+          -
+            Sid: "AllowReadAllParametersExcEnc"
+            Effect: "Allow"
+            Action:
+              - "ssm:GetParameter"
+              - "ssm:GetParameters"
+            Resource: "*"
+
+            ## -------------------------------------------------------------------------------------------------------------------------------
+            ## NOTE: These statements are optional depending on how the customer will handle the source of CloudFormation templates for Change Sets
+            ## -------------------------------------------------------------------------------------------------------------------------------
+          -
+            Sid: "AllowRequiredS3Access"
+            Effect: "Allow"
+            Action:
+              - "s3:Get*"
+              - "s3:List*"
+            Resource: "*"
+          -
+            Sid: "AllowS3BucketAccess"
+            Effect: "Deny"
+            Action:
+              - "s3:ListBucket*"
+              - "s3:GetBucket"
+            NotResource: 
+              - !Ref CloudFormationBucketArn
+          -
+            Sid: "DenyAccessS3ExceptForCF"
+            Effect: "Deny"
+            Action:
+              - "s3:GetObject*"
+            NotResource: 
+              - !Sub '${CloudFormationBucketArn}/*'
+
+            ## Allows the group to submit Change Sets for approval
+            ##
+          - 
+            Sid: AllowCreateChangeSet
+            Effect: "Allow"
+            Action:
+              - "cloudformation:CreateChangeSet"
+              - "cloudformation:DescribeChangeSet"
+              - "cloudformation:ListChangeSets"
+
+              ## Allow for stack information to be viewable and change sets to be submitted via Console
+              
+              - "cloudformation:GetTemplateSummary"
+              - "cloudformation:ListStacks"
+            Resource: "*"
+          -
+            Sid: AllowCloudFormationConsoleAccess
+            Effect: "Allow"
+            Action:
+              - "cloudformation:CreateUploadBucket"
+            Resource: "*"
+          -
+            Sid: AllowPassCloudFormationExecuteRole
+            Effect: "Allow"
+            Action:
+              - "iam:GetRole"
+              - "iam:PassRole"
+            Resource: !Ref CloudFormationExecuteIAMRoleArn   
+
+            ## Allows Directory Service Management except for destructive and risky actions
+            ##
+          -
+            Sid: AllowDirectoryServiceManagement
+            Effect: "Allow"
+            Action:
+              - "ds:*"
+            Resource: "*"
+          -
+            Sid: DenyDestructiveDirectoryServiceManagement
+            Effect: "Allow"
+            Action:
+              - "ds:DeleteDirectory"
+              - "ds:ResetUserPassword"
+            Resource: "*"
+
+            ## These statements allow scoped usage of EC2 and restricts networking-layer permissions
+            ## Allows changes to Security Groups without a user-defined tag
+          -
+            Sid: "AllowAllEC2"
+            Effect: "Allow"
+            Action:
+              - "ec2:*"
+            Resource: "*"
+          -
+            Sid: "DenyEC2Networking"
+            Effect: "Deny"
+            Action:
+              - "ec2:AcceptTransitGatewayVpcAttachment"
+              - "ec2:AcceptVpcEndpointConnections"
+              - "ec2:AcceptVpcPeeringConnection"
+              - "ec2:AdvertiseByoipCidr"
+              - "ec2:AssociateDhcpOptions"
+              - "ec2:AssociateRouteTable"
+              - "ec2:AssociateSubnetCidrBlock"
+              - "ec2:AssociateTransitGatewayRouteTable"
+              - "ec2:AssociateVpcCidrBlock"
+              - "ec2:AttachClassicLinkVpc"
+              - "ec2:AttachInternetGateway"
+              - "ec2:AttachVpnGateway"
+              - "ec2:CreateDefaultVpc"
+              - "ec2:CreateDefaultSubnet"
+              - "ec2:CreateDhcpOptions"
+              - "ec2:CreateEgressOnlyInternetGateway"
+              - "ec2:CreateInternetGateway"
+              - "ec2:CreateNatGateway"
+              - "ec2:CreateNetworkAcl*"
+              - "ec2:CreateRoute*"
+              - "ec2:CreateTransitGateway*"
+              - "ec2:CreateVpc*"
+              - "ec2:CreateVpn*"
+              - "ec2:DeleteCustomerGateway"
+              - "ec2:DeleteDhcpOptions"
+              - "ec2:DeleteEgressOnlyInternetGateway"
+              - "ec2:DeleteFlowLogs"
+              - "ec2:DeleteInternetGateway"
+              - "ec2:DeleteNatGateway"
+              - "ec2:DeleteNetworkAcl*"
+              - "ec2:DeleteRoute*"
+              - "ec2:DeleteSubnet"
+              - "ec2:DeleteTransitGateway*"
+              - "ec2:DeleteVpc*"
+              - "ec2:DeprovisionByoipCidr"
+              - "ec2:DetachClassicLinkVpc"
+              - "ec2:DetachInternetGateway"
+              - "ec2:DetachNetworkInterface"
+              - "ec2:DetachVpnGateway"
+              - "ec2:DisableTransitGatewayRouteTablePropagation"
+              - "ec2:DisableVgwRoutePropagation"
+              - "ec2:DisableVpcClassicLink"
+              - "ec2:DisableVpcClassicLinkDnsSupport"
+              - "ec2:DisassociateRouteTable"
+              - "ec2:DisassociateSubnetCidrBlock"
+              - "ec2:DisassociateTransitGatewayRouteTable"
+              - "ec2:DisassociateVpcCidrBlock"
+              - "ec2:EnableTransitGatewayRouteTablePropagation"
+              - "ec2:EnableVgwRoutePropagation"
+              - "ec2:EnableVpcClassicLink"
+              - "ec2:EnableVpcClassicLinkDnsSupport"
+              - "ec2:ModifySubnetAttribute"
+              - "ec2:ModifyTransitGatewayVpcAttachment"
+              - "ec2:ModifyVpc*"
+              - "ec2:ProvisionByoipCidr"
+              - "ec2:RejectTransitGatewayVpcAttachment"
+              - "ec2:RejectVpc*"
+              - "ec2:ReplaceNetworkAcl*"
+              - "ec2:ReplaceRoute*"
+              - "ec2:ReplaceTransitGatewayRoute"
+              - "ec2:WithdrawByoipCidr"
+            Resource: "*"
+          -
+            Sid: "RestrictSecurityGroupMod"
+            Effect: "Deny"
+            Action:
+              - "ec2:AuthorizeSecurityGroup*"
+              - "ec2:DeleteSecurityGroup"
+              - "ec2:RevokeSecurityGroup*"
+              - "ec2:UpdateSecurityGroup*"
+            Resource: "*"
+            Condition:
+              StringEquals: 
+                "ec2:ResourceTag/Classification": "Restricted"
+      ManagedPolicyName: Custom-Infrastructure-Admins-Managed-Policy

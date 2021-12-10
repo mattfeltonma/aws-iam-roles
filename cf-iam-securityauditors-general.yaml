@@ -1,0 +1,12 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create IAM Group and Managed Policy for Security Auditors"
+Resources:
+
+  ## Create IAM Group
+
+  SecurityAuditorsIAMGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: "SecurityAuditors"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
