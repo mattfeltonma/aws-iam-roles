@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create IAM Group and Managed Policy for Ops"
+Parameters:
+
+  SSHParameterNamespace:
+    Type: String
+    Description: 'The namespace used for Secure Parameters in Systems Manager'
+  SMKMSArn:
+    Type: String
+    Description: 'This is the Arn of the KMS CMK used to parameters for SM Secure Parameters'
+
+Resources:
+
+## Create IAM Group
+
+  OpsIAMGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: "Operations"
+
+## Create IAM Policy
+
+  OpsIAMPolicy:  
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Groups: 
+        - !Ref OpsIAMGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+
+            ## Allow use of Session Manager
+          -
+            Sid: "AllowSessionManagerAccess"
+            Effect: "Allow"
+            Action:
+              - "ssm:DescribeSessions"
+              - "ssm:GetConnectionStatus"
+              - "ssm:StartSession"
+              - "ssm:TerminateSession"
+              - "ssm:DescribeInstanceProperties"
+              - "ec2:DescribeInstances"
+            Resource: "*"
+
+            ## Allow access to Systems Manager CMK to decrypt encrypted parameters
+          -
+            Sid: "AllowSMCMKAccess"
+            Effect: "Allow"
+            Action:
+              - "kms:Decrypt"
+            Resource:
+              - !Ref SMKMSArn
+
+            ## Allow access to list parameters across all parameters and get parameters for SSH namespace
+          -
+            Sid: "AllowDescribeParameters"
+            Effect: "Allow"
+            Action:
+              - "ssm:DescribeParameters"
+            Resource: "*"
+          -
+            Sid: "AllowGetSSHParameters"
+            Effect: "Allow"
+            Action:
+              - "ssm:GetParameter"
+              - "ssm:GetParameters"
+              - "ssm:DescribeParameters"
+            Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${SSHParameterNamespace}*'
+      ManagedPolicyName: Custom-Ops-Managed-Policy
